@@ -19,7 +19,12 @@ int main(int argc, char** argv){
     std::unique_ptr<Soundboard> soundboard = std::unique_ptr<Soundboard>(nullptr);
 
     try{
-        soundboard = std::make_unique<Soundboard>();
+        if(argc == 1){
+            soundboard = std::make_unique<Soundboard>(argv[1]);
+        }
+        else {
+            soundboard = std::make_unique<Soundboard>();
+        }
     }
     catch (std::runtime_error e) {
         std::cout << "Failed to Create Soundboard: " << e.what() << std::endl;
