@@ -4,6 +4,7 @@
 #include <memory>
 #include <virtualdevices.hpp>
 #include <pulse/pulseaudio.h>
+#include <thread>
 
 
 class Soundboard {
@@ -19,14 +20,21 @@ class Soundboard {
 
        bool connect_pulse();
        void disconnect_pulse();
+       void initialize_socket_path();
 
        void play_wav(const fs::path& path);
     
     private:
-        pa_mainloop* _mainloop = nullptr;
+        pa_threaded_mainloop* _threaded_mainloop = nullptr;
         pa_context* _context = nullptr;
 
 
         std::unique_ptr<VirtualSink> _virt_sink;
         std::unique_ptr<VirtualSource> _virt_source;
+
+        std::thread _socket_thread;
+        std::atomic<bool> _socket_active{false};
+        std::string _socket_path;
+
+        void run_socket_server();
 };

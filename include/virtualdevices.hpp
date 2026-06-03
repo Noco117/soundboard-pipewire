@@ -5,6 +5,9 @@
 #include <pulse/pulseaudio.h>
 #include <string>
 #include <filesystem>
+#include <atomic>
+#include <mutex>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -27,35 +30,47 @@ struct WAVHeader {
 class VirtualSink
 {
 public:
-    VirtualSink(pa_mainloop*, pa_context*);
+    VirtualSink(pa_threaded_mainloop*, pa_context*);
     ~VirtualSink();
 
     static constexpr std::string_view sink_name{"soundboard-sink"};
     bool link_source(std::string source);
     void play_wav(const fs::path& path);
+
+    void stop_playback();
+    void stop_playback_by_path(const fs::path& path);
 private:
-    pa_mainloop* _mainloop = nullptr;
+    struct PlaybackInstance;
+
+    void play_wav_sync(const fs::path& path, std::shared_ptr<std::atomic<bool>> abort_flag);
+    
+    std::vector<PlaybackInstance> _playback_instances;
+    std::mutex _thread_mutex;
+    
+    pa_threaded_mainloop* _threaded_mainloop = nullptr;
     pa_context* _context = nullptr;
     uint32_t _module_index = PA_INVALID_INDEX;
+
+    
 
 };
 
 class VirtualSource
 {
 public:
-    VirtualSource(pa_mainloop*, pa_context*);
+    VirtualSource(pa_threaded_mainloop*, pa_context*);
     ~VirtualSource();
 
     static constexpr std::string_view source_name{"soundboard-microphone"};
     bool link_sink(std::string sink);
 
 private:
-    pa_mainloop* _mainloop = nullptr;
+    pa_threaded_mainloop* _threaded_mainloop = nullptr;
     pa_context* _context = nullptr;
     uint32_t _module_index = PA_INVALID_INDEX;
 
 };
 
-void wait_for_operation(pa_mainloop* mainloop, pa_operation* op);
+void wait_for_operation(pa_threaded_mainloop* threaded_mainloop, pa_operation* op);
 
 #endif

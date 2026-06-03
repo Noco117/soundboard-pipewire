@@ -1,2 +1,4 @@
 out
 .clangd
+build
+.vscode
