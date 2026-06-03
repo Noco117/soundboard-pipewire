@@ -6,8 +6,8 @@ It provides a socket-based daemon that manages a linked virtual sink and virtual
 - glibc
 - pipewire (and libpipewire)
 - wireplumber
-- pipewirepulse
-- python
+- pipewire-pulse
+- python3
 ## Manual Installation
 Clone the Repository into a local folder and navigate to into it.
 ```
