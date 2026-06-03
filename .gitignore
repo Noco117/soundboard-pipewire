@@ -2,3 +2,10 @@ out
 .clangd
 build
 .vscode
+PKGBUILD
+
+*.out
+*.lib
+*.app
+*.so
+*.obj
