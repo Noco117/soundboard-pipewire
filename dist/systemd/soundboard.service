@@ -1,0 +1,15 @@
+[Unit]
+Description=Soundboard PipeWire Daemon Backend
+
+# Depends on the pipewire and wireplumber services, start afterwards.
+After=pipewire.service wireplumber.service
+Requires=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/soundboard-daemon
+Restart=on-failure
+RestartSec=3s
+
+[Install]
+WantedBy=default.target

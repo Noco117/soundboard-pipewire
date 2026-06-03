@@ -5,10 +5,7 @@ set(SOURCE_FILES
     daemon/socketserver.cpp
 )
 
-# 1. Find the PkgConfig tool
-find_package(PkgConfig REQUIRED)
-
-# 2. Use PkgConfig to find libpipewire-0.3
+# Use PkgConfig to find libpipewire-0.3
 pkg_check_modules(PULSE REQUIRED IMPORTED_TARGET libpulse)
 
 add_executable(soundboard-daemon ${SOURCE_FILES})
