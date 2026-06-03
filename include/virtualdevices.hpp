@@ -51,7 +51,7 @@ private:
     pa_context* _context = nullptr;
     uint32_t _module_index = PA_INVALID_INDEX;
 
-    
+    uint32_t _loopback_index = PA_INVALID_INDEX; 
 
 };
 
@@ -63,6 +63,7 @@ public:
 
     static constexpr std::string_view source_name{"soundboard-microphone"};
     bool link_sink(std::string sink);
+    bool link_source(std::string source);
 
 private:
     pa_threaded_mainloop* _threaded_mainloop = nullptr;

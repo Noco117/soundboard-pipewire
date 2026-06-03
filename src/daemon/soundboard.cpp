@@ -10,6 +10,7 @@
 #include <memory>
 #include <array>
 #include <regex>
+#include <thread>
 
 using namespace std;
 
@@ -17,7 +18,6 @@ using namespace std;
 Soundboard::Soundboard() : Soundboard(get_default_input_device()) {}
 
 Soundboard::Soundboard(string input_device) {
-    // TODO: Implement the constructor for the Sounboard
     if (!connect_pulse()) {
         throw runtime_error("Failed to context to PulseAudio/PipeWire server!");
     }
@@ -25,7 +25,9 @@ Soundboard::Soundboard(string input_device) {
     _virt_sink = make_unique<VirtualSink>(_threaded_mainloop, _context);
     _virt_source = make_unique<VirtualSource>(_threaded_mainloop, _context);
 
-    _virt_sink->link_source(input_device);
+    this_thread::sleep_for(std::chrono::seconds(1));
+
+    _virt_source->link_source(input_device);
     _virt_source->link_sink(std::string(_virt_sink->sink_name));
 
 

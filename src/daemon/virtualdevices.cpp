@@ -1,5 +1,7 @@
 #include "virtualdevices.hpp"
 #include <cstdint>
+#include <pulse/context.h>
+#include <pulse/introspect.h>
 #include <pulse/operation.h>
 #include <pulse/pulseaudio.h>
 #include <pulse/stream.h>
@@ -83,6 +85,7 @@ pair<string, int> run_command(string command){
 
 VirtualSink::VirtualSink(pa_threaded_mainloop* threaded_mainloop, pa_context* context) : _threaded_mainloop(threaded_mainloop), _context(context){
     string module_args = format("media.class=Audio/Sink sink_name={} channel_map=stereo", sink_name);
+    string loopback_args = format("source=\"{}.monitor\" sink=\"@DEFAULT_SINK@\"", sink_name);
     // auto cb = [](pa_context*, uint32_t idx, void* userdata){
     //     auto* index_ptr = static_cast<uint32_t*>(userdata);
     //     *index_ptr = idx;
@@ -90,11 +93,14 @@ VirtualSink::VirtualSink(pa_threaded_mainloop* threaded_mainloop, pa_context* co
 
 
     ModuleLoadContext load_ctx{_threaded_mainloop, &_module_index};
+    ModuleLoadContext loopback_ctx{_threaded_mainloop, &_loopback_index};
 
     pa_threaded_mainloop_lock(_threaded_mainloop);
     pa_operation* loadVirtualSink = pa_context_load_module(_context, "module-null-sink", module_args.c_str(), module_load_cb, &load_ctx);
     wait_for_operation(_threaded_mainloop, loadVirtualSink);
 
+    pa_operation* loadLoopbackModule = pa_context_load_module(_context, "module-loopback", loopback_args.c_str(), module_load_cb, &loopback_ctx);
+    wait_for_operation(_threaded_mainloop, loadLoopbackModule);
     pa_threaded_mainloop_unlock(_threaded_mainloop);
 
     if (_module_index == PA_INVALID_INDEX){
@@ -102,6 +108,7 @@ VirtualSink::VirtualSink(pa_threaded_mainloop* threaded_mainloop, pa_context* co
     }
 
     cout << "Successfully created Virtual Sink with Module ID: " << _module_index << endl;
+    cout << "Successfully created Loopback Module with Module ID: " << _loopback_index << endl;
 }
 
 bool VirtualSink::link_source(string source_name){
@@ -300,6 +307,7 @@ VirtualSink::~VirtualSink()
 
     if (_context && (_module_index != PA_INVALID_INDEX)){
         cout << "Unloading Module with ID: " << _module_index << endl;
+        cout << "Unloading Module with ID: " << _loopback_index << endl;
         // auto cb = [](pa_context* c, int success, void* userdata) {
         //     if (!success) cerr << "Warning: Failed to gracefully unload module." << endl;
         // };
@@ -307,6 +315,8 @@ VirtualSink::~VirtualSink()
         pa_threaded_mainloop_lock(_threaded_mainloop);
         pa_operation* unloadVirtualSink = pa_context_unload_module(_context, _module_index, module_unload_cb, _threaded_mainloop);
         wait_for_operation(_threaded_mainloop, unloadVirtualSink);
+        pa_operation* unloadLoopbackModule = pa_context_unload_module(_context, _loopback_index, module_unload_cb, _threaded_mainloop);
+        wait_for_operation(_threaded_mainloop, unloadLoopbackModule);
         pa_threaded_mainloop_unlock(_threaded_mainloop);
     }
 }
@@ -332,6 +342,21 @@ VirtualSource::VirtualSource(pa_threaded_mainloop* threaded_mainloop, pa_context
     cout << "Successfully created Virtual Source with Module ID: " << _module_index << endl;
 }
 
+bool VirtualSource::link_source(string sname){
+    const std::array<string, 2> dirs = {"FL", "FR"};
+    for (const auto& dir : dirs){
+        string command = format("pw-link {}:capture_{} {}:input_{}", sname, dir, source_name, dir);
+
+        cout << command << endl;
+        auto cmdreturn = run_command(command);
+        if(cmdreturn.second != 0){
+            cerr << command << " -- " << cmdreturn.first << endl;
+            return false;
+        }
+    }
+    return true;
+}
+
 bool VirtualSource::link_sink(string sink_name){
     const std::array<string, 2> directions = {"FL", "FR"};
     for (const auto& drc : directions){
@@ -340,7 +365,7 @@ bool VirtualSource::link_sink(string sink_name){
         cout << command << endl;
         auto cmdreturn = run_command(command);
         if(cmdreturn.second != 0){
-            cerr << cmdreturn.first << endl;
+            cerr << command << " -- " << cmdreturn.first << endl;
             return false;
         }
     }
