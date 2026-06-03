@@ -19,7 +19,7 @@ int main(int argc, char** argv){
     std::unique_ptr<Soundboard> soundboard = std::unique_ptr<Soundboard>(nullptr);
 
     try{
-        if(argc == 1){
+        if(argc == 2){
             soundboard = std::make_unique<Soundboard>(argv[1]);
         }
         else {
