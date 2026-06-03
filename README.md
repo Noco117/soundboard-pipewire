@@ -1,5 +1,5 @@
 # soundboard-pipewire v1.0
-This is a leightweight command-line soundboard for PipeWire with PipewirePulse. 
+This is a lightweight command-line soundboard for PipeWire with PipewirePulse. 
 It provides a socket-based daemon that manages a linked virtual sink and virtual source, and plays uncompressed PCM .wav files into the audio stream from an audio input. 
 
 ## Dependencies
