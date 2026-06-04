@@ -34,15 +34,17 @@ public:
     ~VirtualSink();
 
     static constexpr std::string_view sink_name{"soundboard-sink"};
+    void set_volume(float volume);
+
     bool link_source(std::string source);
-    void play_wav(const fs::path& path);
+    void play_wav(const fs::path& path, float vol);
 
     void stop_playback();
     void stop_playback_by_path(const fs::path& path);
 private:
     struct PlaybackInstance;
 
-    void play_wav_sync(const fs::path& path, std::shared_ptr<std::atomic<bool>> abort_flag);
+    void play_wav_sync(const fs::path& path, std::shared_ptr<std::atomic<bool>> abort_flag, float vol);
     
     std::vector<PlaybackInstance> _playback_instances;
     std::mutex _thread_mutex;
@@ -64,12 +66,13 @@ public:
     static constexpr std::string_view source_name{"soundboard-microphone"};
     bool link_sink(std::string sink);
     bool link_source(std::string source);
+    bool unlink_sink(std::string sink);
+    bool unlink_source(std::string source);
 
 private:
     pa_threaded_mainloop* _threaded_mainloop = nullptr;
     pa_context* _context = nullptr;
     uint32_t _module_index = PA_INVALID_INDEX;
-
 };
 
 void wait_for_operation(pa_threaded_mainloop* threaded_mainloop, pa_operation* op);

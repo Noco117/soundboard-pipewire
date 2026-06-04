@@ -111,6 +111,11 @@ VirtualSink::VirtualSink(pa_threaded_mainloop* threaded_mainloop, pa_context* co
     cout << "Successfully created Loopback Module with Module ID: " << _loopback_index << endl;
 }
 
+void VirtualSink::set_volume(float vol){
+    int volume = static_cast<int>(vol * 100.f);
+    run_command(format("pactl set-sink-volume {} {}%", sink_name, volume));
+}
+
 bool VirtualSink::link_source(string source_name){
     const std::array<string, 2> directions = {"FL", "FR"};
     for (const auto& drc : directions){
@@ -125,7 +130,7 @@ bool VirtualSink::link_source(string source_name){
     return true;
 }
 
-void VirtualSink::play_wav(const fs::path& path){
+void VirtualSink::play_wav(const fs::path& path, float vol){
     lock_guard<mutex> lock(_thread_mutex);
 
     for(auto it = _playback_instances.begin(); it != _playback_instances.end(); ){
@@ -141,8 +146,8 @@ void VirtualSink::play_wav(const fs::path& path){
     fs::path mutable_path = fs::absolute(path);
     auto per_thread_abort = std::make_shared<std::atomic<bool>>(false);
     _playback_instances.emplace_back(
-            thread([this, path, per_thread_abort](){
-                    this->play_wav_sync(path, per_thread_abort);
+            thread([this, path, per_thread_abort, vol](){
+                    this->play_wav_sync(path, per_thread_abort, vol);
                     per_thread_abort->store(true);
             }),
             per_thread_abort,
@@ -150,7 +155,7 @@ void VirtualSink::play_wav(const fs::path& path){
     );
 }
 
-void VirtualSink::play_wav_sync(const fs::path& path, shared_ptr<atomic<bool>> abort_flag){
+void VirtualSink::play_wav_sync(const fs::path& path, shared_ptr<atomic<bool>> abort_flag, float vol){
     ifstream wav_file(path, std::ios::binary);
     if (!wav_file.is_open()) {
         std::cerr << "Error: Could not open WAV file: " << path << std::endl;
@@ -229,7 +234,7 @@ void VirtualSink::play_wav_sync(const fs::path& path, shared_ptr<atomic<bool>> a
         int16_t* samples = reinterpret_cast<int16_t*>(buffer.data());
 
         for (size_t i = 0; i < num_samples; ++i){
-            float scaled_sample = samples[i] * 0.1f;
+            float scaled_sample = samples[i] * vol;
 
             // Clip the values to prevent integer overflow clipping artifacts
             if (scaled_sample > 32767.0f)  scaled_sample = 32767.0f;
@@ -357,10 +362,40 @@ bool VirtualSource::link_source(string sname){
     return true;
 }
 
+bool VirtualSource::unlink_source(string sname){
+    const std::array<string, 2> dirs = {"FL", "FR"};
+    for (const auto& dir : dirs){
+        string command = format("pw-link -d {}:capture_{} {}:input_{}", sname, dir, source_name, dir);
+
+        cout << command << endl;
+        auto cmdreturn = run_command(command);
+        if(cmdreturn.second != 0){
+            cerr << command << " -- " << cmdreturn.first << endl;
+            return false;
+        }
+    }
+    return true; 
+}
+
 bool VirtualSource::link_sink(string sink_name){
     const std::array<string, 2> directions = {"FL", "FR"};
     for (const auto& drc : directions){
         string command = format("pw-link {}:monitor_{} {}:input_{}", sink_name, drc, source_name, drc);
+        
+        cout << command << endl;
+        auto cmdreturn = run_command(command);
+        if(cmdreturn.second != 0){
+            cerr << command << " -- " << cmdreturn.first << endl;
+            return false;
+        }
+    }
+    return true;
+}
+
+bool VirtualSource::unlink_sink(string sink_name){
+    const std::array<string, 2> directions = {"FL", "FR"};
+    for (const auto& drc : directions){
+        string command = format("pw-link -d {}:monitor_{} {}:input_{}", sink_name, drc, source_name, drc);
         
         cout << command << endl;
         auto cmdreturn = run_command(command);
