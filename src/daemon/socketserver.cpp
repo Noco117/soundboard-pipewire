@@ -41,11 +41,11 @@ static const unordered_map<string, Command> command_map = {
 
 static std::string usage_instructions = "Usage: \t <required>; [optional]\n\n"
 "\tsoundboard play <path-to-wav> [volume]\n"
-"\tsoundboard stop [path-to-wav]"
-"\tsoundboard set volume <volume>"
-"\tsoundboard link <sink|source>"
-"\tsoundboard unlink <sink|source>"
-"\tsoundboard kill"
+"\tsoundboard stop [path-to-wav]\n"
+"\tsoundboard set volume <volume>\n"
+"\tsoundboard link <sink|source>\n"
+"\tsoundboard unlink <sink|source>\n"
+"\tsoundboard kill\n"
 "\tsoundboard help";
 
 
