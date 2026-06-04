@@ -274,17 +274,21 @@ void Soundboard::run_socket_server(){
                     if (token == "SINK") {reversed_tokens.pop_back(); _virt_source->unlink_sink(reversed_tokens.back());}
                     else if (token == "SOURCE") {reversed_tokens.pop_back(); _virt_source->unlink_source(reversed_tokens.back());}
                     else if (token == "INPUT") break;
-                    else swrite("Unexpected option");
+                    else 
+                    {
+                        string msg = "Unexpected option \n\n" + usage_instructions;
+                        swrite(msg);
+                    }
                     break;
                 }
                 case Command::Kill:
                     _close_cb();
                     break;
                 case Command::Unkown:
-                    swrite("Unexpected command");
+                    swrite("Unexpected command \n\n" + usage_instructions);
                     break;
                 default:
-                    swrite( "unexpected");
+                    swrite( "Malformed Command \n\n" + usage_instructions);
                     break;
             }
         }
