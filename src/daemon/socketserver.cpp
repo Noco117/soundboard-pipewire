@@ -23,6 +23,7 @@ enum class Command {
     Link,
     Unlink,
     Kill,
+    Help,
     Unkown
 };
 
@@ -32,12 +33,20 @@ static const unordered_map<string, Command> command_map = {
     {"set" ,  Command::Set},
     {"link",  Command::Link},
     {"unlink",Command::Unlink},
-    {"kill",  Command::Kill}
+    {"kill",  Command::Kill},
+    {"help", Command::Help},
+    {"-h", Command::Help},
+    {"--help", Command::Help},
 };
 
-static std::string usage_instructions = "Usage: \t\t\t\t <required>; [optional]\n"
+static std::string usage_instructions = "Usage: \t <required>; [optional]\n\n"
 "\tsoundboard play <path-to-wav> [volume]\n"
-"\tsoundboard stop [path-to-wav]";
+"\tsoundboard stop [path-to-wav]"
+"\tsoundboard set volume <volume>"
+"\tsoundboard link <sink|source>"
+"\tsoundboard unlink <sink|source>"
+"\tsoundboard kill"
+"\tsoundboard help";
 
 
 std::string to_lower(std::string_view data) {
@@ -257,10 +266,10 @@ void Soundboard::run_socket_server(){
                     }
                     string_view token = reversed_tokens.back();
 
-                    if (token == "SINK") {reversed_tokens.pop_back(); _virt_source->link_sink(reversed_tokens.back());}
-                    else if (token == "SOURCE") {reversed_tokens.pop_back(); _virt_source->link_source(reversed_tokens.back());}
-                    else if (token == "INPUT") break;
-                    else swrite("Unexpected option");
+                    if (to_lower(token) == "sink") {reversed_tokens.pop_back(); _virt_source->link_sink(reversed_tokens.back());}
+                    else if (to_lower(token) == "source") {reversed_tokens.pop_back(); _virt_source->link_source(reversed_tokens.back());}
+                    else if (to_lower(token) == "input") break;
+                    else swrite("Unexpected option: \n\n" + usage_instructions);
                     break;
                 }
                 case Command::Unlink:
@@ -271,9 +280,9 @@ void Soundboard::run_socket_server(){
                     }
                     string_view token = reversed_tokens.back();
 
-                    if (token == "SINK") {reversed_tokens.pop_back(); _virt_source->unlink_sink(reversed_tokens.back());}
-                    else if (token == "SOURCE") {reversed_tokens.pop_back(); _virt_source->unlink_source(reversed_tokens.back());}
-                    else if (token == "INPUT") break;
+                    if (token == "sink") {reversed_tokens.pop_back(); _virt_source->unlink_sink(reversed_tokens.back());}
+                    else if (token == "source") {reversed_tokens.pop_back(); _virt_source->unlink_source(reversed_tokens.back());}
+                    else if (token == "input") break;
                     else 
                     {
                         string msg = "Unexpected option \n\n" + usage_instructions;
@@ -283,6 +292,9 @@ void Soundboard::run_socket_server(){
                 }
                 case Command::Kill:
                     _close_cb();
+                    break;
+                case Command::Help:
+                    swrite(usage_instructions);
                     break;
                 case Command::Unkown:
                     swrite("Unexpected command \n\n" + usage_instructions);
