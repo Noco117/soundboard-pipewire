@@ -143,7 +143,7 @@ void Soundboard::run_socket_server(){
             Command cmd = (it != command_map.end()) ? it->second : Command::Unkown;
             reversed_tokens.pop_back();
             auto swrite = [client_fd](string msg){
-                write(client_fd, msg.c_str(), msg.size() + 1);};
+                auto _  = write(client_fd, msg.c_str(), msg.size() + 1);};
             switch(cmd){
                 case Command::Play:
                 {   
