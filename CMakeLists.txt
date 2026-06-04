@@ -15,4 +15,4 @@ add_subdirectory(dist) # This only copies files from dist, currently systemd use
 
 # --- SYSTEM INSTALLATION RULES ---
 include(GNUInstallDirs)
-install(PROGRAMS src/cli/soundboard-cli DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME soundboard)
+# install(PROGRAMS src/cli/soundboard-cli DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME soundboard)

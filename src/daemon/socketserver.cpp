@@ -10,6 +10,9 @@
 #include <unordered_map>
 #include <exception>
 #include <charconv>
+#include <algorithm>
+#include <cctype>
+#include <format>
 
 using namespace std;
 
@@ -24,15 +27,30 @@ enum class Command {
 };
 
 static const unordered_map<string, Command> command_map = {
-    {"PLAY",  Command::Play},
-    {"STOP",  Command::Stop},
-    {"SET" ,  Command::Set},
-    {"LINK",  Command::Link},
-    {"UNLINK",Command::Unlink},
-    {"KILL",  Command::Kill}
+    {"play",  Command::Play},
+    {"stop",  Command::Stop},
+    {"set" ,  Command::Set},
+    {"link",  Command::Link},
+    {"unlink",Command::Unlink},
+    {"kill",  Command::Kill}
 };
 
+static std::string usage_instructions = "Usage: \t\t\t\t <required>; [optional]\n"
+"\tsoundboard play <path-to-wav> [volume]\n"
+"\tsoundboard stop [path-to-wav]";
 
+
+std::string to_lower(std::string_view data) {
+    // 1. Explicitly construct a mutable string from the view
+    std::string result(data); 
+    
+    // 2. Transform the local copy
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+    
+    return result;
+}
 
 void Soundboard::initialize_socket_path(){
     uid_t uid = getuid();
@@ -121,22 +139,36 @@ void Soundboard::run_socket_server(){
             size_t n = reversed_tokens.size();
             if (n == 0) {close(client_fd); continue;}
 
-            auto it = command_map.find(reversed_tokens.back());
+            auto it = command_map.find(to_lower(reversed_tokens.back()));
             Command cmd = (it != command_map.end()) ? it->second : Command::Unkown;
             reversed_tokens.pop_back();
+            auto swrite = [client_fd](string msg){
+                write(client_fd, msg.c_str(), msg.size() + 1);};
             switch(cmd){
                 case Command::Play:
                 {   
-                    if (n == 1) break; else if (n > 3) break;
+                    //if (n == 1) break; else if (n > 3) break;
+                    if ((n==1) || (n > 3)){
+                        swrite(usage_instructions);
+                        break;
+                    }
                     string_view token = reversed_tokens.back();
                     float volume = 1.0f;
                     fs::path fpath;
                     try{
                         fpath = fs::canonical(token);
-                        if(!fs::is_regular_file(fpath)) break;
+                        if(!fs::is_regular_file(fpath)) {
+                            swrite(string("Not a File!"));
+                            break;
+                        }
+                    }
+                    catch(fs::filesystem_error& e){
+                        swrite(format("Not a valid path: {}", token));
+                        break;
                     }
                     catch (exception& e){
-                        cerr << "Error while parsing Socket Command: " << e.what() << endl;
+                        string msg = string("Error while parsing Socket Command: ") + e.what();
+                        swrite(msg);
                         break;
                     }
                     if (n==3) {
@@ -147,9 +179,10 @@ void Soundboard::run_socket_server(){
                             if(ec != std::errc()){
                                 volume = 1.0f;
                             }
-                            std::cout << "Volume: " << volume << endl;
                         }
                         catch (exception& e){
+                            string msg = string("Syntax Error: ") + e.what();
+                            swrite(msg);
                             break;
                         }
                     }
@@ -157,11 +190,13 @@ void Soundboard::run_socket_server(){
                     if (fpath.extension() == ".wav"){
                         _virt_sink->stop_playback_by_path(fpath);
                         play_wav(fpath, volume);
+                    }else{
+                        swrite("Not a .wav file!");
                     }
-
                     break;
                 }
                 case Command::Stop:
+                {
                     if (n == 1){
                         _virt_sink->stop_playback();
                     break;
@@ -171,64 +206,89 @@ void Soundboard::run_socket_server(){
                             fs::path path = fs::canonical(token);
                             _virt_sink->stop_playback_by_path(path);
                         }
+                        catch(fs::filesystem_error&) {
+                            swrite(format("Not a valid path: {}", token));
+                        }
                         catch (exception& e){
+                            string msg = string("Error: ") + e.what();
+                            swrite(msg);
                             break;
                         }
                     } else {
+                        swrite("Unexpected number of options\n" + usage_instructions);
                         break;
                     }
+                    break;
+                }
                 case Command::Set:
                 {
-                    if (n==1) break;
+                    if (n!=3) {
+                        swrite("Unexpected number of options\n" + usage_instructions);
+                        break;
+                    }
                     
                     string_view token = reversed_tokens.back();
-                    if (token == "VOLUME"){
+                    if (token == "volume"){
                         reversed_tokens.pop_back();
-                        if (n!=3) break;
                         token = reversed_tokens.back();
                         try{
                             float volume;
                             auto [ptr, ec] = from_chars(token.data(), token.data() + token.size(), volume);
-                            if (ec != std::errc()){
+                            if (ec != std::errc() || (0 > volume) || (volume > 2)){
+                                swrite("Not a valid floating point volume between 0.0 and 2.0.");
                                 break;
                             }
 
                             _virt_sink->set_volume(volume);
                         }
                         catch(exception& e){
+                            swrite(string("Syntax Error: ") + e.what());
                             break;
                         }
                     }
-                    else break;
+                    else swrite("Unexpected option");
+                    break;
                 }
                 case Command::Link:
                 {
-                    if (n!=3) break;
+                    if (n!=3){
+                        swrite("Unexpected number of options\n" + usage_instructions);
+                        break;
+                    }
                     string_view token = reversed_tokens.back();
 
                     if (token == "SINK") {reversed_tokens.pop_back(); _virt_source->link_sink(reversed_tokens.back());}
                     else if (token == "SOURCE") {reversed_tokens.pop_back(); _virt_source->link_source(reversed_tokens.back());}
                     else if (token == "INPUT") break;
-                    else break;
+                    else swrite("Unexpected option");
+                    break;
                 }
                 case Command::Unlink:
                 {
-                    if (n!=3) break;
+                    if (n!=3) {
+                        swrite("Unexpected number of options\n" + usage_instructions);
+                        break;
+                    }
                     string_view token = reversed_tokens.back();
 
                     if (token == "SINK") {reversed_tokens.pop_back(); _virt_source->unlink_sink(reversed_tokens.back());}
                     else if (token == "SOURCE") {reversed_tokens.pop_back(); _virt_source->unlink_source(reversed_tokens.back());}
                     else if (token == "INPUT") break;
-                    else break;
+                    else swrite("Unexpected option");
+                    break;
                 }
                 case Command::Kill:
                     _close_cb();
+                    break;
                 case Command::Unkown:
+                    swrite("Unexpected command");
                     break;
                 default:
+                    swrite( "unexpected");
                     break;
             }
         }
+        shutdown(client_fd, SHUT_WR);
         close(client_fd);
     }
 
