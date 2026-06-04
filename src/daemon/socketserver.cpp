@@ -1,12 +1,37 @@
 #include <cstring>
+#include <filesystem>
+#include <pulse/def.h>
 #include <soundboard.hpp>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <iostream>
+#include <unordered_map>
+#include <exception>
+#include <charconv>
 
 using namespace std;
+
+enum class Command {
+    Play,
+    Stop,
+    Set,
+    Link,
+    Unlink,
+    Kill,
+    Unkown
+};
+
+static const unordered_map<string, Command> command_map = {
+    {"PLAY",  Command::Play},
+    {"STOP",  Command::Stop},
+    {"SET" ,  Command::Set},
+    {"LINK",  Command::Link},
+    {"UNLINK",Command::Unlink},
+    {"KILL",  Command::Kill}
+};
+
 
 
 void Soundboard::initialize_socket_path(){
@@ -24,6 +49,23 @@ void Soundboard::initialize_socket_path(){
 
     _socket_path = runtime_dir / "soundboard.sock";
     cout << "[Initialization] Socket assigned to: " << _socket_path << std::endl;
+}
+
+vector<string> Soundboard::parseSocketCommand(string cmd){
+    vector<string> reversed_tokens;
+    string_view sv(cmd);
+
+    size_t idx = sv.find_last_of(' ');
+    while (idx != string_view::npos){
+        string_view token = sv.substr(idx + 1);
+        if (!token.empty()) reversed_tokens.emplace_back(token);
+        sv = sv.substr(0, idx);
+        idx = sv.find_last_of(' ');
+    }
+
+    if (!sv.empty()) reversed_tokens.emplace_back(sv);
+
+    return reversed_tokens;
 }
 
 void Soundboard::run_socket_server(){
@@ -62,13 +104,10 @@ void Soundboard::run_socket_server(){
         int client_fd = accept(server_fd, nullptr, nullptr);
         
         if (client_fd < 0) {
-            // This is usually a timeout hit (EAGAIN/EWOULDBLOCK). Loop back and check _networking_active
             continue; 
         }
 
-        // Set client read timeout so slow clients can't stall our worker
         setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
         memset(buffer, 0, sizeof(buffer));
         ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
 
@@ -77,28 +116,117 @@ void Soundboard::run_socket_server(){
             command.erase(command.find_last_not_of("\n\t\r") + 1); 
             cout << "[Socket IPC] Received command: " << command << endl;
             // Basic parsing framework: Expecting "PLAY /absolute/path/to/audio.wav"
-            if (command.rfind("PLAY ", 0) == 0) {
-                string audio_path = command.substr(5);
-                
-                // Strip trailing newlines or whitespaces sent by network tools (like netcat)
-                audio_path.erase(audio_path.find_last_not_of(" \n\r\t") + 1);
 
-                cout << "[Socket IPC] Triggering audio play: " << audio_path << endl;
-                
-                const fs::path absolute_path = fs::absolute(audio_path);
-                _virt_sink->stop_playback_by_path(absolute_path);
-                this->play_wav(absolute_path); 
-            }
-            else if (command=="STOP")
-            {
-                _virt_sink->stop_playback();
-            }
-            else if (command.rfind("STOP ", 0) == 0) { 
-                string audio_path = command.substr(5);
-                audio_path.erase(audio_path.find_last_not_of(" \n\r\t") + 1);
-                
-                cout << "[Socket IPC] Triggering audio stop: " << audio_path << endl;
-                _virt_sink->stop_playback_by_path(audio_path);
+            vector<string> reversed_tokens = parseSocketCommand(command);
+            size_t n = reversed_tokens.size();
+            if (n == 0) {close(client_fd); continue;}
+
+            auto it = command_map.find(reversed_tokens.back());
+            Command cmd = (it != command_map.end()) ? it->second : Command::Unkown;
+            reversed_tokens.pop_back();
+            switch(cmd){
+                case Command::Play:
+                {   
+                    if (n == 1) break; else if (n > 3) break;
+                    string_view token = reversed_tokens.back();
+                    float volume = 1.0f;
+                    fs::path fpath;
+                    try{
+                        fpath = fs::canonical(token);
+                        if(!fs::is_regular_file(fpath)) break;
+                    }
+                    catch (exception& e){
+                        cerr << "Error while parsing Socket Command: " << e.what() << endl;
+                        break;
+                    }
+                    if (n==3) {
+                        reversed_tokens.pop_back();
+                        token = reversed_tokens.back();
+                        try {
+                            auto [ptr, ec] = from_chars(token.data(), token.data() + token.size(), volume);
+                            if(ec != std::errc()){
+                                volume = 1.0f;
+                            }
+                            std::cout << "Volume: " << volume << endl;
+                        }
+                        catch (exception& e){
+                            break;
+                        }
+                    }
+
+                    if (fpath.extension() == ".wav"){
+                        _virt_sink->stop_playback_by_path(fpath);
+                        play_wav(fpath, volume);
+                    }
+
+                    break;
+                }
+                case Command::Stop:
+                    if (n == 1){
+                        _virt_sink->stop_playback();
+                    break;
+                    } else if (n == 2){
+                        string_view token = reversed_tokens.back();
+                        try {
+                            fs::path path = fs::canonical(token);
+                            _virt_sink->stop_playback_by_path(path);
+                        }
+                        catch (exception& e){
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                case Command::Set:
+                {
+                    if (n==1) break;
+                    
+                    string_view token = reversed_tokens.back();
+                    if (token == "VOLUME"){
+                        reversed_tokens.pop_back();
+                        if (n!=3) break;
+                        token = reversed_tokens.back();
+                        try{
+                            float volume;
+                            auto [ptr, ec] = from_chars(token.data(), token.data() + token.size(), volume);
+                            if (ec != std::errc()){
+                                break;
+                            }
+
+                            _virt_sink->set_volume(volume);
+                        }
+                        catch(exception& e){
+                            break;
+                        }
+                    }
+                    else break;
+                }
+                case Command::Link:
+                {
+                    if (n!=3) break;
+                    string_view token = reversed_tokens.back();
+
+                    if (token == "SINK") {reversed_tokens.pop_back(); _virt_source->link_sink(reversed_tokens.back());}
+                    else if (token == "SOURCE") {reversed_tokens.pop_back(); _virt_source->link_source(reversed_tokens.back());}
+                    else if (token == "INPUT") break;
+                    else break;
+                }
+                case Command::Unlink:
+                {
+                    if (n!=3) break;
+                    string_view token = reversed_tokens.back();
+
+                    if (token == "SINK") {reversed_tokens.pop_back(); _virt_source->unlink_sink(reversed_tokens.back());}
+                    else if (token == "SOURCE") {reversed_tokens.pop_back(); _virt_source->unlink_source(reversed_tokens.back());}
+                    else if (token == "INPUT") break;
+                    else break;
+                }
+                case Command::Kill:
+                    _close_cb();
+                case Command::Unkown:
+                    break;
+                default:
+                    break;
             }
         }
         close(client_fd);

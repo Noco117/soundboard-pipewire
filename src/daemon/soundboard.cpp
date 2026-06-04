@@ -60,8 +60,8 @@ void Soundboard::update(){
 
 }
 
-void Soundboard::play_wav(const fs::path& path){
-    _virt_sink->play_wav(path);
+void Soundboard::play_wav(const fs::path& path, float volume){
+    _virt_sink->play_wav(path, volume);
 }
 
 string Soundboard::get_default_input_device(){

@@ -25,6 +25,7 @@ int main(int argc, char** argv){
         else {
             soundboard = std::make_unique<Soundboard>();
         }
+        soundboard->set_close_cb([](){keep_running.store(false);});
     }
     catch (std::runtime_error e) {
         std::cout << "Failed to Create Soundboard: " << e.what() << std::endl;

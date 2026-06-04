@@ -20,9 +20,12 @@ def get_socket_path():
 def print_usage():
     print("Soundboard CLI Controller")
     print("Usage:")
-    print("  soundboard play <path_to_wav>")
+    print("  soundboard play <path_to_wav> [volume]")
     print("  soundboard stop")
     print("  soundboard stop <path_to_wav>")
+    print("  soundboard set volume <float>")
+    print("  soundboard kill")
+    # TODO: IMPLEMENT Soundboard link, unlink
     sys.exit(1)
 
 def main():
@@ -41,7 +44,9 @@ def main():
         # Crucial: Resolve relative paths and '~' into absolute paths for the daemon
         raw_path = sys.argv[2]
         abs_path = os.path.abspath(os.path.expanduser(raw_path))
-        payload = f"PLAY {abs_path}"
+        if len(sys.argv) > 3:
+            volume = sys.argv[3]
+        payload = f"PLAY {abs_path}  {volume}"
 
     elif action == "stop":
         if len(sys.argv) >= 3:
@@ -52,6 +57,12 @@ def main():
         else:
             # Global master kill switch
             payload = "STOP"
+    elif action == "set":
+        if len(sys.argv) == 3:
+            if sys.argv[2] == "volume":
+                payload =  f"SET VOLUME {sys.argv[3]}"
+    elif action == "kill":
+        payload = "KILL"
     else:
         print(f"Error: Unknown action '{action}'")
         print_usage()
