@@ -63,9 +63,10 @@ int main(int argc, char* argv[]){
 
     char buffer[512];
     ssize_t bytes_written = recv(sock, buffer, sizeof(buffer)-1, 0);
-    std::string_view bytes_to_flush(buffer, bytes_written);
-    std::cout << bytes_to_flush << std::endl;
-
+    if (!(bytes_written < 1)){
+        std::string_view bytes_to_flush(buffer, bytes_written);
+        std::cout << bytes_to_flush << std::endl;
+    }
     close(sock);
     return 0;
 }
