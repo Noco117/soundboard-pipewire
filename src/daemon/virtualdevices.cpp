@@ -188,6 +188,15 @@ void VirtualSink::play_wav_sync(const fs::path& path, shared_ptr<atomic<bool>> a
         return;
     }
 
+    // Read through all the chunks until data chunk is reached.
+    WAVChunkHeader chunk;
+    wav_file.read(reinterpret_cast<char*>(&chunk), sizeof(WAVChunkHeader));
+    string_view chunk_name{chunk.header, 4};
+    string data_lit {"data"};
+    while (chunk_name != data_lit){
+        wav_file.seekg(chunk.size, ios::cur); // skip parsing the chunks data if its not the data chunk
+        wav_file.read(reinterpret_cast<char*>(&chunk), sizeof(WAVChunkHeader)); // read next chunk
+    }
 
     // STREAM INSTANTIATION
     pa_threaded_mainloop_lock(_threaded_mainloop);
@@ -259,6 +268,13 @@ void VirtualSink::play_wav_sync(const fs::path& path, shared_ptr<atomic<bool>> a
 
     pa_threaded_mainloop_lock(_threaded_mainloop);
     std::cout << "WAV Playback finished." << std::endl;
+    
+    pa_operation* op = pa_stream_drain(stream, [](pa_stream*, int, void* userdata){
+        auto mainloop = static_cast<pa_threaded_mainloop* >(userdata);
+        pa_threaded_mainloop_signal(mainloop, 0);
+    }, _threaded_mainloop);
+    wait_for_operation(_threaded_mainloop, op);
+
     pa_stream_disconnect(stream);
     pa_stream_unref(stream);
     pa_threaded_mainloop_unlock(_threaded_mainloop);

@@ -23,8 +23,11 @@ struct WAVHeader {
     uint32_t byte_rate;      // sample_rate * num_channels * (bits_per_sample / 8)
     uint16_t sample_alignment;
     uint16_t bits_per_sample;// 8, 16, or 32 bits
-    char data_header[4];     // Contains "data"
-    uint32_t data_bytes;     // Total size of raw audio data payload
+};
+
+struct WAVChunkHeader {
+    char header[4]; // Name of the Chunk 
+    uint32_t size; // Size of the Chunk in bytes
 };
 
 class VirtualSink

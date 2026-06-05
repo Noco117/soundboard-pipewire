@@ -1,6 +1,7 @@
 #include "soundboard.hpp"
 #include "virtualdevices.hpp"
 
+#include <exception>
 #include <iostream>
 #include <pulse/context.h>
 #include <pulse/def.h>
@@ -61,7 +62,8 @@ void Soundboard::update(){
 }
 
 void Soundboard::play_wav(const fs::path& path, float volume){
-    _virt_sink->play_wav(path, volume);
+    try {_virt_sink->play_wav(path, volume);}
+    catch (exception& e) {cout << "Error: " << e.what() << endl;}
 }
 
 string Soundboard::get_default_input_device(){
